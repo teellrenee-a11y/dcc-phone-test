@@ -131,7 +131,7 @@ function textInput(key, label, opts = {}) {
   const isDate = /^Date of this sitting$/i.test(label || '');
   if (isDate) {
     inp.setAttribute('type', 'date');
-    if (!get(key)) { const d = new Date(); set(key, `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(get(key) || '')) { const d = new Date(); set(key, `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); }
   }
   inp.value = get(key) || '';
   const w = el('div', { class: 'warn', role: 'alert', hidden: '' }, WARN + ' Write Have or Don\'t have instead.');
