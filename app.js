@@ -23,26 +23,67 @@ function set(k, v) { if (v === '' || v == null || v === false) delete st.a[k]; e
 
 /* ---------- branching ---------- */
 const START = 's1t1';
-function flags() {
+const WHO = ['One parent', 'Both parents', 'Another relative (aunt, uncle, grandparent)', 'Someone else (friend, person you care for)'];
+function whoFor() {
   const a = st.a;
+  if (a.who) return a.who;
+  const legacy = a[START + 'r0.p1.0'];
+  return legacy === 'One parent' ? WHO[0] : legacy === 'Both parents' ? WHO[1] : '';
+}
+function isParent() { const w = whoFor(); return w === WHO[0] || w === WHO[1] || w === ''; }
+function isOther() { return !isParent(); }
+function flags() {
+  const a = st.a, w = whoFor();
+  if (isOther()) {
+    const m = a.pmarried;
+    return { who: w || '(not chosen)', both: m === 'Yes', spouse: m === 'Yes', living: 'Yes', married: m === 'Yes' ? 'Yes' : (m || 'No'), household: 'Yes' };
+  }
   return {
-    both: a[START + 'r0.p1.0'] !== 'One parent',
+    who: w || '(not chosen)',
+    both: w === WHO[1],
+    spouse: false,
     living: a[START + 'r1.p1.0'],
     married: a[START + 'r2.p1.0'],
     household: a[START + 'r3.p1.0'],
   };
 }
 function names() {
-  return [st.a['s2t1r0.p1.0'] || 'Parent 1', st.a['s2t1r0.p2.0'] || 'Parent 2'];
+  const a = st.a, n1 = (a.name1 || a['s2t1r0.p1.0'] || '').trim(), n2 = (a.name2 || a['s2t1r0.p2.0'] || '').trim();
+  if (isOther()) return [n1 || 'this person', n2 || 'their spouse'];
+  if (whoFor() === WHO[0]) return [n1 || 'this person', n2 || 'Parent 2'];
+  return [n1 || 'Parent 1', n2 || 'Parent 2'];
 }
-function showCouples() { const f = flags(); return f.both && f.married !== 'No' && f.married !== 'Divorced/separated'; }
+function cap(x) { return x.charAt(0).toUpperCase() + x.slice(1); }
+function esc(x) { return String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+/* Personalize built-in wording: Parent 1/2 become the names; for non-parents, parent wording becomes neutral. */
+function pz(t, html) {
+  if (!t) return t;
+  let [n1, n2] = names();
+  if (html) { n1 = esc(n1); n2 = esc(n2); }
+  t = t.replace(/Parent 1: ________/g, n1).replace(/Parent 2: ________/g, n2)
+       .replace(/Parent 1/g, n1).replace(/Parent 2/g, n2);
+  if (isOther()) {
+    const pairs = [[/your parent or parents/gi, 'this person'], [/My parent or parents were/g, 'The person (or couple) was'], [/each parent's name/g, 'each name'],
+      [/your parents/gi, 'this person'], [/each parent/g, 'each person'], [/this parent/g, 'this person'], [/which parent/g, 'which person'],
+      [/one or both parents/g, 'one person or a couple'], [/for one parent; allow more for two/g, 'for one person; allow more for a couple'],
+      [/both parents at once/g, 'both spouses at once'], [/Both parents living/g, 'Both spouses living'], [/doing one parent/g, 'doing one person'],
+      [/the parents/g, 'this person'], [/living parents?/g, 'living person'], [/parents/g, 'people'], [/parent/g, 'person']];
+    for (const [a, b] of pairs) t = t.replace(a, b);
+  }
+  return t;
+}
+function showCouples() { const f = flags(); if (f.spouse) return true; return f.both && f.married !== 'No' && f.married !== 'Divorced/separated'; }
 function showShort(row) {
   const f = flags();
   if (!row.short || !f.both) return false;
   if (/^Joint/.test(row.short)) return f.married !== 'No' && f.married !== 'Divorced/separated';
   return true;
 }
-function rowVisible(row) { return !row.couples || showCouples(); }
+function rowVisible(row) {
+  if (row.id === START + 'r0') return false; // replaced by "Who are you planning for?"
+  if (row.id.startsWith(START)) return flags().both && isParent();
+  return !row.couples || showCouples();
+}
 function partVisible(row, part, i) {
   // "Parent 2 state" on the Start screen is hidden when only one parent is selected
   if (!flags().both && /^Parent 2/.test(part.label)) return false;
@@ -106,24 +147,24 @@ function partsUI(row, who, parts) {
   return parts.map((p, i) => {
     if (!partVisible(row, p, i)) return null;
     const key = `${row.id}.${who}.${i}`;
-    if (p.t === 'choice') return el('div', { class: 'part' }, p.label ? el('div', { class: 'plabel' }, p.label) : null, chips(key, p.opts));
-    return textInput(key, p.label, { rowLabel: row.plain, multi: /describe|Anything|Where any|Other emails/.test(row.plain) });
+    if (p.t === 'choice') return el('div', { class: 'part' }, p.label ? el('div', { class: 'plabel' }, pz(p.label)) : null, chips(key, p.opts));
+    return textInput(key, pz(p.label), { rowLabel: row.plain, multi: /describe|Anything|Where any|Other emails/.test(row.plain) });
   });
 }
 function rowCard(row, two) {
   const [n1, n2] = names(), f = flags();
-  const card = el('div', { class: 'card' }, el('div', { class: 'q', html: row.label }));
+  const card = el('div', { class: 'card' }, el('div', { class: 'q', html: pz(row.label, true) }));
   if (!two) { card.append(...partsUI(row, 'p1', row.p1)); return card; }
-  card.append(f.both ? el('div', { class: 'who' }, 'Parent 1: ' + n1) : null, ...partsUI(row, 'p1', row.p1));
+  card.append(f.both ? el('div', { class: 'who' }, cap(n1)) : null, ...partsUI(row, 'p1', row.p1));
   if (!f.both) return card;
-  card.append(el('div', { class: 'who p2' }, 'Parent 2: ' + n2));
+  card.append(el('div', { class: 'who p2' }, cap(n2)));
   const p2box = el('div', {}, ...partsUI(row, 'p2', row.p2 || []));
   if (showShort(row)) {
     const k = row.id + '.p2.short';
     const note = el('div', { class: 'shortnote' });
-    const sb = el('button', { type: 'button', class: 'chip short', 'aria-pressed': String(!!get(k)) }, row.short);
+    const sb = el('button', { type: 'button', class: 'chip short', 'aria-pressed': String(!!get(k)) }, pz(row.short));
     const sync = () => { const on = !!get(k); sb.setAttribute('aria-pressed', String(on)); p2box.hidden = on || !(row.p2 || []).length;
-      note.textContent = on ? `Marked "${row.short}". Nothing to retype.` : ((row.p2 || []).length ? '' : 'Tap if the answer is the same for both.'); };
+      note.textContent = on ? `Marked "${pz(row.short)}". Nothing to retype.` : ((row.p2 || []).length ? '' : 'Tap if the answer is the same for both.'); };
     sb.addEventListener('click', () => { set(k, !get(k)); sync(); });
     card.append(sb, note); sync();
   } else if (!(row.p2 || []).length) {
@@ -142,13 +183,14 @@ function render() {
   m.innerHTML = '';
   document.getElementById('progress').style.width = Math.round(cur / (SCREENS.length - 1) * 100) + '%';
   document.getElementById('steplabel').textContent = `Screen ${cur + 1} of ${SCREENS.length}`;
-  m.append(el('h1', {}, s.title));
+  m.append(el('h1', {}, s.id === 's1' ? 'Start here: who this packet covers' : pz(s.title)));
   if (cur === 0) welcomeTop(m);
   if (s === FINISH) finishScreen(m);
+  if (s.id === 's1') whoTop(m);
   for (const b of s.blocks) {
-    if (b.type === 'para') m.append(el('p', { class: b.cls, html: b.html }));
-    else if (b.type === 'sub') m.append(el('h2', {}, b.text));
-    else if (b.type === 'guide') m.append(el('p', { class: 'self', html: b.html }), ...b.refs.map(r => el('button', { type: 'button', class: 'guidelink', onclick: () => openGuide(r) }, 'See guide ' + r + ' \u2197')));
+    if (b.type === 'para') m.append(el('p', { class: b.cls, html: pz(b.html, true) }));
+    else if (b.type === 'sub') m.append(el('h2', {}, pz(b.text)));
+    else if (b.type === 'guide') m.append(el('p', { class: 'self', html: pz(b.html, true) }), ...b.refs.map(r => el('button', { type: 'button', class: 'guidelink', onclick: () => openGuide(r) }, 'See guide ' + r + ' \u2197')));
     else if (b.type === 'field') m.append(el('div', { class: 'card' }, textInput(b.id, b.label, { multi: b.multi, ph: 'Type here, or tap Unsure' })));
     else if (b.type === 'check') {
       const k = b.id; m.append(el('div', { class: 'card' }, chips(k, ['Read', 'Unsure'])));
@@ -172,10 +214,29 @@ function welcomeTop(m) {
   m.append(el('div', { class: 'note' }, el('p', {}, el('strong', {}, 'Private test. '),
     'Your answers stay on this phone until you choose to send them to Renee at the end. Renee will delete the results once she has reviewed them.')));
 }
+function whoTop(m) {
+  m.append(el('div', { class: 'card', id: 'whoCard' }, el('div', { class: 'q' }, 'Who are you planning for?'), chips('who', WHO)));
+  const w = whoFor();
+  if (!w) return;
+  const both = w === WHO[1];
+  const nameBox = el('div', { class: 'card', id: 'nameCard' }, el('div', { class: 'q' }, both ? "Their names" : "This person's name"),
+    textInput('name1', both ? 'First parent\'s name' : 'Name', { ph: 'For example, Aunt Mary' }));
+  if (both) nameBox.append(textInput('name2', 'Second parent\'s name', { ph: 'Type a name' }));
+  m.append(nameBox);
+  if (isOther()) {
+    m.append(el('div', { class: 'card', id: 'marriedCard' }, el('div', { class: 'q' }, 'Is this person married?'), chips('pmarried', ['Yes', 'No', 'Unsure'])));
+    if (st.a.pmarried === 'Yes') m.append(el('div', { class: 'card' }, textInput('name2', "Spouse's name", { ph: 'Type a name' })));
+  }
+}
 function startNotes(m) {
   const f = flags();
+  if (isOther()) {
+    m.append(el('p', { class: 'self' }, f.spouse ? `You'll see an area for ${names()[0]} and one for ${names()[1]} on each screen, plus a few questions for couples.` : 'Questions are for this one person. Spouse and couple questions are hidden.'));
+    return;
+  }
+  if (!whoFor()) { m.append(el('p', { class: 'self' }, 'Choose who you are planning for to continue.')); return; }
   if (f.living === 'No') m.append(el('div', { class: 'note' }, 'This packet is for living parents. If a parent has died, tell Renee; the after-death walkthrough is the better fit for that parent. You can still continue for the living parent by choosing "One parent".'));
-  m.append(el('p', { class: 'self' }, f.both ? 'You\'ll see a Parent 1 and Parent 2 area on each screen.' : 'Only one parent: Parent 2 areas are hidden.'));
+  m.append(el('p', { class: 'self' }, f.both ? 'You\'ll see an area for each parent on each screen.' : 'Only one parent: second-parent areas are hidden.'));
 }
 function go(i) {
   if (cur !== 0 || i !== 0) st.lastScreen = i;
@@ -186,7 +247,7 @@ document.getElementById('backBtn').onclick = () => go(cur - 1);
 document.getElementById('nextBtn').onclick = () => go(cur + 1);
 // re-render the Start screen when its answers change so notes follow the choice
 document.getElementById('screen').addEventListener('click', e => {
-  if (SCREENS[cur].id === 's1' && e.target.classList.contains('chip')) { const y = window.scrollY; render(); window.scrollTo(0, y); }
+  if (SCREENS[cur].id === 's1' && e.target.classList.contains('chip') && !e.target.closest('.textrow')) { const y = window.scrollY; render(); window.scrollTo(0, y); }
 });
 
 /* ---------- guide ---------- */
@@ -207,14 +268,14 @@ document.getElementById('guideBack').onclick = () => { document.getElementById('
 /* ---------- summary ---------- */
 function cellText(row, who) {
   const parts = who === 'p2' && !(row.p2 || []).length ? row.p1 : (row[who] || []);
-  if (who === 'p2' && st.a[row.id + '.p2.short'] && showShort(row)) return row.short;
+  if (who === 'p2' && st.a[row.id + '.p2.short'] && showShort(row)) return pz(row.short);
   const out = [];
   parts.forEach((p, i) => {
     if (!partVisible(row, p, i)) return;
     const k = `${row.id}.${who}.${i}`; let v = st.a[k] || '';
     if (st.a[k + '.u']) v = v ? v + ' (Unsure)' : 'Unsure';
     if (v === '?') v = 'Unsure';
-    if (v) out.push(p.label ? `${p.label}: ${v}` : v);
+    if (v) out.push(p.label ? `${pz(p.label)}: ${v}` : v);
   });
   return out.join('; ') || '(blank)';
 }
@@ -223,25 +284,32 @@ function collect() {
   for (const s of SPEC) {
     const items = [];
     for (const b of s.blocks) {
-      if (b.type === 'field') items.push({ q: b.label, p1: (st.a[b.id] || '') + (st.a[b.id + '.u'] ? ' (Unsure)' : '') || '(blank)', single: true });
-      if (b.type === 'check') items.push({ q: 'A note for the parents (R7)', p1: st.a[b.id] || '(blank)', single: true });
-      if (b.type === 'table') for (const r of b.rows) if (rowVisible(r)) items.push(b.two && f.both ? { q: r.plain, p1: cellText(r, 'p1'), p2: cellText(r, 'p2') } : { q: r.plain, p1: cellText(r, 'p1'), single: !b.two });
+      if (b.type === 'field') items.push({ q: pz(b.label), p1: (st.a[b.id] || '') + (st.a[b.id + '.u'] ? ' (Unsure)' : '') || '(blank)', single: true });
+      if (b.type === 'check') items.push({ q: pz('A note for the parents (R7)'), p1: st.a[b.id] || '(blank)', single: true });
+      if (b.type === 'table') for (const r of b.rows) if (rowVisible(r)) items.push(b.two && f.both ? { q: pz(r.plain), p1: cellText(r, 'p1'), p2: cellText(r, 'p2') } : { q: pz(r.plain), p1: cellText(r, 'p1'), single: !b.two });
     }
-    if (items.length) secs.push({ title: s.title, items });
+    if (s.id === 's1') {
+      const [x1, x2] = [st.a.name1 || '', st.a.name2 || ''];
+      items.unshift({ q: 'Who are you planning for?', p1: whoFor() || '(blank)', single: true },
+        { q: 'Name', p1: x1 + (f.both && x2 ? ' and ' + x2 : '') || '(blank)', single: true });
+      if (isOther()) items.splice(2, 0, { q: 'Is this person married?', p1: st.a.pmarried || '(blank)', single: true });
+    }
+    if (items.length) secs.push({ title: s.id === 's1' ? 'Start here: who this packet covers' : pz(s.title), items });
   }
-  return { both: f.both, n1, n2, secs };
+  return { who: whoFor(), both: f.both, n1, n2, secs };
 }
 function wrap(t, w) { const out = []; for (const para of String(t).split('\n')) { let line = ''; for (const word of para.split(' ')) { if ((line + ' ' + word).trim().length > w) { if (line) out.push(line); line = word; while (line.length > w) { out.push(line.slice(0, w)); line = line.slice(w); } } else line = (line + ' ' + word).trim(); } out.push(line); } return out; }
 function summaryText() {
   const d = collect(), W = 36, L = [];
-  L.push('MODULE 1 PHONE TEST RESULTS (planning ahead, living parents)');
+  L.push('MODULE 1 PHONE TEST RESULTS (planning ahead)');
+  L.push('Planning for: ' + (d.who || '(not chosen)'));
   L.push('Information for the family. Not a will. Not tax advice. Not legal advice.');
   L.push('Created: ' + new Date().toLocaleString() + (st.started ? '   Started: ' + new Date(st.started).toLocaleString() : ''));
-  L.push(d.both ? `Parent 1: ${d.n1}    Parent 2: ${d.n2}` : `Parent: ${d.n1} (one parent)`);
+  L.push(d.both ? `Names: ${d.n1}    ${d.n2}` : `Name: ${d.n1} (one person)`);
   L.push('Renee will delete these results once she has reviewed them.');
   for (const s of d.secs) {
     L.push('', '=== ' + s.title.toUpperCase() + ' ===');
-    if (d.both && s.items.some(i => !i.single)) L.push(pad('PARENT 1: ' + d.n1, W) + ' | ' + 'PARENT 2: ' + d.n2);
+    if (d.both && s.items.some(i => !i.single)) L.push(pad(d.n1.toUpperCase(), W) + ' | ' + d.n2.toUpperCase());
     for (const it of s.items) {
       L.push('', '* ' + it.q);
       if (it.single || !d.both) { wrap(it.p1, 2 * W).forEach(x => L.push('  ' + x)); continue; }
@@ -252,17 +320,17 @@ function summaryText() {
   return L.join('\n') + '\n';
 }
 function pad(s, w) { return s + ' '.repeat(Math.max(0, w - s.length)); }
-function resultsJSON() { return JSON.stringify({ format: 'm1phone.v1', created: new Date().toISOString(), started: st.started, flags: flags(), names: names(), summary: collect(), raw: st.a }, null, 2); }
+function resultsJSON() { return JSON.stringify({ format: 'm1phone.v2', planningFor: whoFor(), created: new Date().toISOString(), started: st.started, flags: flags(), names: names(), summary: collect(), raw: st.a }, null, 2); }
 function scoreLines() {
   const sc = SPEC.find(s => /scorecard/i.test(s.title)); const L = [];
-  for (const b of sc.blocks) { if (b.type === 'table') b.rows.forEach(r => L.push(`- ${r.plain}: ${cellText(r, 'p1')}`)); if (b.type === 'field') L.push(`- ${b.label}: ${st.a[b.id] || '(blank)'}`); }
+  for (const b of sc.blocks) { if (b.type === 'table') b.rows.forEach(r => L.push(`- ${pz(r.plain)}: ${cellText(r, 'p1')}`)); if (b.type === 'field') L.push(`- ${pz(b.label)}: ${st.a[b.id] || '(blank)'}`); }
   return L.join('\n');
 }
 function mailtoHref() {
   const full = summaryText();
   let body = full;
   if (encodeURIComponent(body).length > MAILTO_MAX) {
-    body = `Hi Renee,\n\nMy Module 1 phone test answers are too long for an email link, so please see attached file (Module-1-phone-test-results.txt). I'll attach it to this email from my Downloads/Files.\n\nScorecard:\n${scoreLines()}\n`;
+    body = `Hi Renee,\n\nPlanning for: ${whoFor() || '(not chosen)'} (${names().join(' / ')})\n\nMy Module 1 phone test answers are too long for an email link, so please see attached file (Module-1-phone-test-results.txt). I'll attach it to this email from my Downloads/Files.\n\nScorecard:\n${scoreLines()}\n`;
     while (encodeURIComponent(body).length > MAILTO_MAX) body = body.slice(0, -40);
   }
   return `mailto:${RENEE}?subject=${encodeURIComponent(SUBJECT)}&body=${encodeURIComponent(body)}`;
@@ -284,7 +352,7 @@ function finishScreen(m) {
   }
   m.append(el('p', { class: 'self' }, 'Sends to ' + RENEE + '. Renee will delete the results once she has reviewed them.'));
   const t = el('table', { class: 'sumtbl', id: 'summary' });
-  if (d.both) t.append(el('tr', {}, el('th', {}, 'Parent 1: ' + d.n1), el('th', {}, 'Parent 2: ' + d.n2)));
+  if (d.both) t.append(el('tr', {}, el('th', {}, cap(d.n1)), el('th', {}, cap(d.n2))));
   for (const s of d.secs) {
     t.append(el('tr', { class: 'sec' }, el('td', { colspan: d.both ? 2 : 1 }, s.title)));
     for (const it of s.items) {
