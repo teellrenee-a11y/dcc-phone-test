@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1f4e79">
+<title>Module 1 planning-ahead (Mark - aunt test)</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <div class="bar"><div id="progress"></div></div>
+  <div class="toprow"><span id="steplabel"></span><button id="guideBtn" class="link">Guide</button></div>
+</header>
+<main id="screen" tabindex="-1"></main>
+<section id="guide" hidden>
+  <div class="guidehead"><button id="guideBack" class="btn">&larr; Back to form</button></div>
+  <div id="guideBody"></div>
+</section>
+<nav id="nav">
+  <button id="backBtn" class="btn">Back</button>
+  <button id="nextBtn" class="btn primary">Next</button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
