@@ -4,7 +4,7 @@
 const KEY = 'm1phone.v1';
 const RENEE = 'teellrenee@gmail.com';
 const SUBJECT = 'Module 1 phone test results';
-const MAILTO_MAX = 1800; // encoded body length kept safe for iPhone Mail and Gmail app
+const MAILTO_MAX = 50000; // encoded body length; iPhone Mail and Gmail open links this long
 const SPEC = window.SPEC, GUIDE = window.GUIDE;
 const FINISH = { id: 'finish', title: 'Review and send', blocks: [] };
 const SCREENS = SPEC.concat([FINISH]);
@@ -345,13 +345,25 @@ function download(name, text, type) {
 function finishScreen(m) {
   const d = collect();
   m.append(el('p', {}, 'Here is everything you entered. Use Back to fix anything. Then send it to Renee.'));
-  m.append(el('div', { class: 'note' }, 'Step 1: tap "Download results file" so you have the file. Step 2: tap "Email to Renee" and attach the file if the email says "see attached file". On iPhone you can instead use "Share results file" and pick Mail.'));
-  m.append(el('a', { class: 'btn primary big', id: 'mailBtn', href: mailtoHref(), style: null, role: 'button' }, 'Email to Renee'));
-  m.append(el('button', { type: 'button', class: 'btn big', id: 'dlTxt', onclick: () => download('Module-1-phone-test-results.txt', summaryText(), 'text/plain;charset=utf-8') }, 'Download results file (.txt)'));
-  m.append(el('button', { type: 'button', class: 'btn big', id: 'dlJson', onclick: () => download('Module-1-phone-test-results.json', resultsJSON(), 'application/json') }, 'Download data file (.json, for Renee)'));
-  if (navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.txt', { type: 'text/plain' })] })) {
-    m.append(el('button', { type: 'button', class: 'btn big', onclick: () => navigator.share({ title: SUBJECT, files: [new File([summaryText()], 'Module-1-phone-test-results.txt', { type: 'text/plain' })] }).catch(() => {}) }, 'Share results file (iPhone)'));
+  const txtName = 'Module-1-phone-test-results.txt', jsonName = 'Module-1-phone-test-results.json';
+  const files = () => [new File([summaryText()], txtName, { type: 'text/plain' }), new File([resultsJSON()], jsonName, { type: 'application/json' })];
+  let canFiles = false;
+  try { canFiles = !!(navigator.share && navigator.canShare && navigator.canShare({ files: files() })); } catch (e) { canFiles = false; }
+  const fits = encodeURIComponent(summaryText()).length <= MAILTO_MAX;
+  const shareText = 'Please send to ' + RENEE + '. My Module 1 answers are attached.';
+  if (canFiles) {
+    m.append(el('div', { class: 'note' }, 'Tap "Send my answers to Renee". Your answers are already attached. Pick Mail (or Gmail), put ' + RENEE + ' in the To line, and tap Send.'));
+    m.append(el('button', { type: 'button', class: 'btn primary big', id: 'shareBtn', onclick: () => navigator.share({ title: SUBJECT, text: shareText, files: files() }).then(() => toast('Sent to the share sheet')).catch(() => {}) }, 'Send my answers to Renee'));
+    m.append(el('a', { class: 'btn big', id: 'mailBtn', href: mailtoHref(), role: 'button' }, 'Or email them instead'));
+  } else if (fits) {
+    m.append(el('div', { class: 'note' }, 'Tap "Send my answers to Renee". An email opens with all your answers already in it. Just tap Send.'));
+    m.append(el('a', { class: 'btn primary big', id: 'mailBtn', href: mailtoHref(), role: 'button' }, 'Send my answers to Renee'));
+  } else {
+    m.append(el('div', { class: 'note', id: 'attachNote' }, 'Your answers are too long to fit in an email by themselves. Step 1: tap "Download results file". Step 2: tap "Email to Renee" and attach that file from your Downloads or Files.'));
+    m.append(el('a', { class: 'btn primary big', id: 'mailBtn', href: mailtoHref(), role: 'button' }, 'Email to Renee'));
   }
+  m.append(el('button', { type: 'button', class: 'btn big', id: 'dlTxt', onclick: () => download(txtName, summaryText(), 'text/plain;charset=utf-8') }, 'Download results file (.txt)'));
+  m.append(el('button', { type: 'button', class: 'btn big', id: 'dlJson', onclick: () => download(jsonName, resultsJSON(), 'application/json') }, 'Download data file (.json, for Renee)'));
   m.append(el('p', { class: 'self' }, 'Sends to ' + RENEE + '. Renee will delete the results once she has reviewed them.'));
   const t = el('table', { class: 'sumtbl', id: 'summary' });
   if (d.both) t.append(el('tr', {}, el('th', {}, cap(d.n1)), el('th', {}, cap(d.n2))));
