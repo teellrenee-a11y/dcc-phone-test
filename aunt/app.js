@@ -154,14 +154,15 @@ function partsUI(row, who, parts) {
     return textInput(key, pz(p.label), { rowLabel: row.plain, multi: /describe|Anything|Where any|Other emails/.test(row.plain) });
   });
 }
+function add(node, ...kids) { node.append(...kids.filter(k => k != null)); return node; }
 function rowCard(row, two) {
   const [n1, n2] = names(), f = flags();
   const card = el('div', { class: 'card' }, el('div', { class: 'q', html: pz(row.label, true) }));
-  if (!two) { card.append(...partsUI(row, 'p1', row.p1)); return card; }
-  card.append(f.both ? el('div', { class: 'who' }, cap(n1)) : null, ...partsUI(row, 'p1', row.p1));
+  if (!two) { add(card, ...partsUI(row, 'p1', row.p1)); return card; }
+  add(card, f.both ? el('div', { class: 'who' }, cap(n1)) : null, ...partsUI(row, 'p1', row.p1));
   if (!f.both) return card;
   card.append(el('div', { class: 'who p2' }, cap(n2)));
-  const p2box = el('div', {}, ...partsUI(row, 'p2', row.p2 || []));
+  const p2box = add(el('div', {}), ...partsUI(row, 'p2', row.p2 || []));
   if (showShort(row)) {
     const k = row.id + '.p2.short';
     const note = el('div', { class: 'shortnote' });
@@ -172,7 +173,7 @@ function rowCard(row, two) {
     card.append(sb, note); sync();
   } else if (!(row.p2 || []).length) {
     // P2 cell is only a shortcut that is hidden (e.g. not married): give P2 the same question
-    p2box.append(...partsUI(row, 'p2', row.p1));
+    add(p2box, ...partsUI(row, 'p2', row.p1));
   }
   card.append(p2box);
   return card;
