@@ -1,5 +1,5 @@
 // Offline cache only. No network calls for answers; answers never pass through here.
-const C='m1phone-aunt-v1';
+const C='m1phone-aunt-v2';
 const FILES=['./','./index.html','./style.css','./app.js','./data.js','./manifest.webmanifest','./icon.svg'];
 const MINE=k=>/^m1phone-aunt-v\d+$/.test(k); // never touch other copies' caches (e.g. /aunt/)
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(FILES)));self.skipWaiting();});

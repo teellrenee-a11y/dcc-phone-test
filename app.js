@@ -63,7 +63,7 @@ function pz(t, html) {
   t = t.replace(/Parent 1: ________/g, n1).replace(/Parent 2: ________/g, n2)
        .replace(/Parent 1/g, n1).replace(/Parent 2/g, n2);
   if (isOther()) {
-    const pairs = [[/your parent or parents/gi, 'this person'], [/My parent or parents were/g, 'The person (or couple) was'], [/each parent's name/g, 'each name'],
+    const pairs = [[/your parent or parents don't/gi, 'this person doesn\'t'], [/the parent's/g, 'this person\'s'], [/the parent has/g, 'this person has'], [/the parent will/g, 'this person will'], [/your parent or parents/gi, 'this person'], [/My parent or parents were/g, 'The person (or couple) was'], [/each parent's name/g, 'each name'],
       [/your parents/gi, 'this person'], [/each parent/g, 'each person'], [/this parent/g, 'this person'], [/which parent/g, 'which person'],
       [/one or both parents/g, 'one person or a couple'], [/for one parent; allow more for two/g, 'for one person; allow more for a couple'],
       [/both parents at once/g, 'both spouses at once'], [/Both parents living/g, 'Both spouses living'], [/doing one parent/g, 'doing one person'],
@@ -114,11 +114,13 @@ function el(tag, attrs, ...kids) {
 }
 function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
 
+/* Display-only wording for saved option values (values stay the same so saved answers keep working). */
+const CHIP_LABEL = { 'Has their own': 'Has a separate one', "Only if a doctor says they can't manage": "Only if a doctor says this parent can't manage" };
 function chips(key, opts) {
   const box = el('div', { class: 'chips', role: 'group' });
   opts.forEach(o => {
     const b = el('button', { type: 'button', class: 'chip' + (/^(Unsure|\?)$/.test(o) ? ' unsure' : ''), 'aria-pressed': String(get(key) === o),
-      onclick: () => { set(key, get(key) === o ? '' : o); [...box.children].forEach(c => c.setAttribute('aria-pressed', String(get(key) === c.dataset.v))); } }, o === '?' ? '? (Unsure)' : o);
+      onclick: () => { set(key, get(key) === o ? '' : o); [...box.children].forEach(c => c.setAttribute('aria-pressed', String(get(key) === c.dataset.v))); } }, o === '?' ? '? (Unsure)' : (CHIP_LABEL[o] ? pz(CHIP_LABEL[o]) : o));
     b.dataset.v = o; box.append(b);
   });
   return box;
@@ -219,7 +221,7 @@ function whoTop(m) {
   const w = whoFor();
   if (!w) return;
   const both = w === WHO[1];
-  const nameBox = el('div', { class: 'card', id: 'nameCard' }, el('div', { class: 'q' }, both ? "Their names" : "This person's name"),
+  const nameBox = el('div', { class: 'card', id: 'nameCard' }, el('div', { class: 'q' }, both ? "The parents' names" : "This person's name"),
     textInput('name1', both ? 'First parent\'s name' : 'Name', { ph: 'For example, Aunt Mary' }));
   if (both) nameBox.append(textInput('name2', 'Second parent\'s name', { ph: 'Type a name' }));
   m.append(nameBox);
